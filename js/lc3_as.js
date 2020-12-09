@@ -319,13 +319,10 @@ var assemble = (function () {
 
             var _findOrig = findOrig(tokenizedLines);
 
-            var orig = _findOrig.orig;
-            var begin = _findOrig.begin;
+            var orig = _findOrig.orig; // The address of the first .ORIG (where the program will begin at runtime)
+            var begin = _findOrig.begin; // The array index of tokenizedLines of the first instruction/directive
 
-            var _buildSymbolTable = buildSymbolTable(tokenizedLines, orig, begin);
-
-            var symbolTable = _buildSymbolTable.symbolTable;
-            var programLength = _buildSymbolTable.programLength;
+            var symbolTable = buildSymbolTable(tokenizedLines, orig, begin);
 
             var machineCode = generateMachineCode(tokenizedLines, symbolTable, orig, begin);
             return { orig: orig, symbolTable: symbolTable, machineCode: machineCode };
@@ -573,6 +570,20 @@ var assemble = (function () {
         }
         var line = tokenizedLines[lineNumber];
 
+        var orig = isValidOrig(line);
+
+        // If we made it here, isValidOrig(line) didn't throw an Error
+        return {
+            orig: orig,
+            begin: lineNumber + 1
+        };
+    }
+
+
+    /*
+     * Test whether line is a valid .ORIG directive, either throws error or returns orig; ex. 12000
+    */
+    function isValidOrig(line) {
         // Check if there's an .ORIG directive anywhere in the line.
         var hasOrig = line.some(function (token) {
             return token.toUpperCase() === ".ORIG";
@@ -602,12 +613,7 @@ var assemble = (function () {
         if (orig !== Utils.toUint16(orig)) {
             throw new Error('.ORIG operand (' + operand + ') is out of range! ' + 'It should be between 0 and 0xFFFF, inclusive.');
         }
-
-        // Looks like we're good.
-        return {
-            orig: orig,
-            begin: lineNumber + 1
-        };
+        return orig; //If we made it here, we have a valid .ORIG directive
     }
 
     /*
@@ -681,7 +687,17 @@ var assemble = (function () {
         };
         var handlers = {
             handleEnd: function handleEnd(state) {
+                if (state.seenEndDirective) {
+                    throw new Error("any subsequent .END directive must have an accompanying .ORIG directive");
+                }
                 return _extends({}, state, { seenEndDirective: true });
+            },
+            handleOrig: function handleOrig(state, line) {
+                if (!state.seenEndDirective) {
+                    throw new Error("any subsequent .ORIG directive must come after a .END directive");
+                }
+                var newAddress = isValidOrig(line);
+                return _extends({}, state, { seenEndDirective: false, address: newAddress });
             },
             handleLabel: function handleLabel(state, line) {
                 // A label must refer to a valid memory location,
@@ -701,7 +717,7 @@ var assemble = (function () {
             },
             handleDirective: function handleDirective(state, line) {
                 if (state.seenEndDirective) {
-                    return state;
+                    throw new Error("all directives must come between a .ORIG and a .END");
                 }
 
                 var _line2 = _toArray(line);
@@ -720,7 +736,7 @@ var assemble = (function () {
                         case ".BLKW":
                         case ".FILL":
                             ensureUnary();
-                            return null; //no need to determine operand value at this stage in assembling - operand is not used in determineRequiredMemory for .FILL
+                            return null; // no need to determine operand value at this stage in assembling - operand is not used in determineRequiredMemory for .FILL
                         case ".STRINGZ":
                             ensureUnary();
                             return operands[0]; // already a string, from tokenize
@@ -733,7 +749,7 @@ var assemble = (function () {
             },
             handleInstruction: function handleInstruction(state, line) {
                 if (state.seenEndDirective) {
-                    return state;
+                    throw new Error("all instructions must come between a .ORIG and a .END");
                 }
                 return advance(state, determineRequiredMemory(line[0], null));
             }
@@ -744,10 +760,7 @@ var assemble = (function () {
             throw new Error("no .END directive found!");
         }
 
-        return {
-            symbolTable: finalState.symbols,
-            programLength: finalState.address - orig
-        };
+        return finalState.symbols;
     }
 
     /*
@@ -992,41 +1005,40 @@ var assemble = (function () {
         }
     }
 
+    /*
+     * Generates an object where the key is an address from a .ORIG and the value is an array
+     * of machine instructions until the corresponding .END
+    */
     function generateMachineCode(lines, symbols, orig, begin) {
         var initialState = {
-            machineCode: [],
+            machineCode: {},
             address: orig,
-            seenEndDirective: false
+            seenEndDirective: false,
+            currentOrig: orig
         };
         var appendCode = function appendCode(state, code) {
-            return _extends({}, state, {
-                machineCode: state.machineCode.concat(code),
-                address: state.address + code.length
-            });
+            // We haven't added this address to our machine code object, lets add it.
+            if (!state.machineCode[state.currentOrig]) {
+                state.machineCode[state.currentOrig] = [];
+            }
+            state.machineCode[state.currentOrig] = state.machineCode[state.currentOrig].concat(code);
+            state.address = state.address + code.length;
+            return state;
         };
         var handlers = {
             handleDirective: function handleDirective(state, line) {
-                if (state.seenEndDirective) {
-                    return state;
-                }
                 return appendCode(state, encodeDirective(line, symbols));
             },
             handleInstruction: function handleInstruction(state, line) {
-                if (state.seenEndDirective) {
-                    return state;
-                }
                 var pc = state.address + 1;
                 return appendCode(state, encodeInstruction(line, pc, symbols));
             },
-            handleEnd: function handleEnd(state) {
-                return _extends({}, state, { seenEndDirective: true });
+            handleOrig: function handleOrig(state, line) {
+                var newAddress = isValidOrig(line);
+                return _extends({}, state, { address: newAddress, currentOrig: newAddress });
             }
         };
         var finalState = reduceProgram(lines, begin, handlers, initialState);
-
-        if (!finalState.seenEndDirective) {
-            throw new Error("missing .END directive");
-        }
         return finalState.machineCode;
     }
 
@@ -1042,6 +1054,8 @@ var assemble = (function () {
         var handleInstruction = _handlers$handleInstruction === undefined ? id : _handlers$handleInstruction;
         var _handlers$handleEnd = handlers.handleEnd;
         var handleEnd = _handlers$handleEnd === undefined ? id : _handlers$handleEnd;
+        var _handlers$handleOrig = handlers.handleOrig;
+        var handleOrig = _handlers$handleOrig === undefined ? id : _handlers$handleOrig;
 
         // Here are all the things that can come at the start of a line.
         // We use these to determine whether the first token in a line
@@ -1069,6 +1083,9 @@ var assemble = (function () {
             var fst = line[0];
             if (fst.toUpperCase() === ".END") {
                 return delegate(handleEnd);
+            }
+            else if (fst.toUpperCase() === ".ORIG") {
+                return delegate(handleOrig, state, line);
             }
 
             var hasLabel = !commands.includes(fst.toUpperCase());

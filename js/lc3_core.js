@@ -1,4 +1,4 @@
-var LC3 = function() {
+var LC3 = function () {
     // Create and initialize memory; load from OS if possible
     this.memory = new Array(0x10000);
     for (var i = 0; i < this.memory.length; i++) {
@@ -8,10 +8,10 @@ var LC3 = function() {
 
     // Listeners for when registers, memory, etc. are changed
     this.listeners = [];
-    this.addListener = function(callback) {
+    this.addListener = function (callback) {
         this.listeners.push(callback);
     };
-    this.notifyListeners = function(e) {
+    this.notifyListeners = function (e) {
         for (var i = 0; i < this.listeners.length; i++) {
             this.listeners[i](e);
         }
@@ -39,18 +39,18 @@ var LC3 = function() {
     // Addresses of mapped memory locations
     this.kbsr = 0xFE00;
     this.kbdr = 0xFE02;
-    this.dsr =  0xFE04;
-    this.ddr =  0xFE06;
-    this.mcr =  0xFFFE;
+    this.dsr = 0xFE04;
+    this.ddr = 0xFE06;
+    this.mcr = 0xFFFE;
     this.ioLocations = [this.kbsr, this.kbdr, this.dsr, this.ddr];
 
     // Device interrupt vectors
     this.kbiv = 0x0180;
-    this.div  = 0x0181; // TODO is this right? not specified
+    this.div = 0x0181; // TODO is this right? not specified
 
     // Device priority levels
     this.kbpl = 2;
-    this.dpl  = 1;
+    this.dpl = 1;
 
     this.namedTrapVectors = {
         0x20: 'GETC',
@@ -68,12 +68,12 @@ var LC3 = function() {
     this.subroutineLevel = 0;
 };
 
-LC3.prototype.formatAddress = function(address) {
+LC3.prototype.formatAddress = function (address) {
     var label = this.addressToLabel[address];
     return (label !== undefined) ? label : LC3Util.toHexString(address);
 };
 
-LC3.prototype.getConditionCode = function() {
+LC3.prototype.getConditionCode = function () {
     var n = (this.psr & 4) !== 0;
     var z = (this.psr & 2) !== 0;
     var p = (this.psr & 1) !== 0;
@@ -83,7 +83,7 @@ LC3.prototype.getConditionCode = function() {
         return undefined;
     }
 }
-LC3.prototype.setConditionCode = function(value) {
+LC3.prototype.setConditionCode = function (value) {
     value = LC3Util.toInt16(value);
     var n = value < 0;
     var p = value > 0;
@@ -94,7 +94,7 @@ LC3.prototype.setConditionCode = function(value) {
 };
 
 // Stages of the instruction cycle
-LC3.prototype.nextInstruction = function() {
+LC3.prototype.nextInstruction = function () {
     // Store any keypresses since last time.
     this.updateIO();
 
@@ -114,11 +114,11 @@ LC3.prototype.nextInstruction = function() {
 
     return op;
 };
-LC3.prototype.fetch = function() {
+LC3.prototype.fetch = function () {
     this.ir = this.getMemory(this.pc);
     this.setRegister('pc', this.pc + 1);
 };
-LC3.prototype.decode = function(instruction) {
+LC3.prototype.decode = function (instruction) {
     // We'll augment this object depending on the opcode.
     var op = {
         raw: instruction,
@@ -254,7 +254,7 @@ LC3.prototype.decode = function(instruction) {
     }
     return op;
 };
-LC3.prototype.evaluateAddress = function(pc, op) {
+LC3.prototype.evaluateAddress = function (pc, op) {
     if (op.mode === 'none') {
         return null;
     } else if (op.mode === 'pcOffset') {
@@ -267,27 +267,27 @@ LC3.prototype.evaluateAddress = function(pc, op) {
         return undefined;
     }
 };
-LC3.prototype.fetchOperands = function(address) {
+LC3.prototype.fetchOperands = function (address) {
     if (address === null || address === undefined) {
         return address;
     }
     return this.readMemory(address);
 };
-LC3.prototype.execute = function(op, address, operand) {
+LC3.prototype.execute = function (op, address, operand) {
     op.isIO = false;
     switch (op.opcode) {
         case 1: // ADD
         case 5: // AND
             var x1 = this.getRegister(op.sr1);
             var x2 = op.arithmeticMode === 'reg'
-                   ? this.getRegister(op.sr2)
-                   : op.imm;
+                ? this.getRegister(op.sr2)
+                : op.imm;
             return (op.opcode === 1 ? x1 + x2 : x1 & x2);
         case 0: // BR
             var cc = this.getConditionCode();
             var doBreak = (op.n && cc < 0)
-                       || (op.z && cc === 0)
-                       || (op.p && cc > 0);
+                || (op.z && cc === 0)
+                || (op.p && cc > 0);
             if (doBreak) {
                 this.setRegister('pc', address);
             }
@@ -377,7 +377,7 @@ LC3.prototype.execute = function(op, address, operand) {
             return undefined;
     }
 };
-LC3.prototype.storeResult = function(op, result) {
+LC3.prototype.storeResult = function (op, result) {
     switch (op.opcode) {
         case 1: // ADD
         case 5: // AND
@@ -413,12 +413,12 @@ LC3.prototype.storeResult = function(op, result) {
     }
 };
 
-LC3.prototype.instructionToString = function(inAddress, instruction) {
+LC3.prototype.instructionToString = function (inAddress, instruction) {
     var op = this.decode(instruction);
     if (!op.strictValid) {
         return '.FILL ' + LC3Util.toHexString(op.raw);
     }
-    var reg = function(i) {
+    var reg = function (i) {
         return 'R' + i;
     };
     if (!op.strictValid) {
@@ -487,14 +487,14 @@ LC3.prototype.instructionToString = function(inAddress, instruction) {
             return null;
     }
 };
-LC3.prototype.instructionAddressToString = function(address) {
+LC3.prototype.instructionAddressToString = function (address) {
     return this.instructionToString(address, this.getMemory(address));
 };
 
 /*
  * Links a label with an address and notifies listeners.
  */
-LC3.prototype.setLabel = function(address, label) {
+LC3.prototype.setLabel = function (address, label) {
     // Unlink a previous label to the same address or of the same name.
     this.unsetLabelGivenAddress(address);
     this.unsetLabelGivenName(label);
@@ -514,7 +514,7 @@ LC3.prototype.setLabel = function(address, label) {
  * Deletes a label at the given address.
  * Returns true if the given label existed, else false.
  */
-LC3.prototype.unsetLabelGivenAddress = function(address) {
+LC3.prototype.unsetLabelGivenAddress = function (address) {
     var label = this.addressToLabel[address];
     var hasLabel = (label !== undefined);
     if (!hasLabel) {
@@ -528,7 +528,7 @@ LC3.prototype.unsetLabelGivenAddress = function(address) {
  * Deletes a label with the given name.
  * Returns true if the given label existed, else false.
  */
-LC3.prototype.unsetLabelGivenName = function(label) {
+LC3.prototype.unsetLabelGivenName = function (label) {
     var address = this.labelToAddress[label];
     var hasLabel = (address !== undefined);
     if (!hasLabel) {
@@ -541,7 +541,7 @@ LC3.prototype.unsetLabelGivenName = function(label) {
 /*
  * Internal command to unset a label at the given name and address.
  */
-LC3.prototype.unsetLabel_internal_ = function(address, label) {
+LC3.prototype.unsetLabel_internal_ = function (address, label) {
     delete this.addressToLabel[address];
     delete this.labelToAddress[label];
     var ev = {
@@ -554,10 +554,10 @@ LC3.prototype.unsetLabel_internal_ = function(address, label) {
 // Functions to get and set memory.
 // getMemory and setMemory are the referentially transparent versions of
 // readMemory and writeMemory, respectively.
-LC3.prototype.getMemory = function(address) {
+LC3.prototype.getMemory = function (address) {
     return this.memory[address];
 }
-LC3.prototype.setMemory = function(address, data) {
+LC3.prototype.setMemory = function (address, data) {
     var ev = {
         type: 'memset',
         address: address,
@@ -570,14 +570,14 @@ LC3.prototype.setMemory = function(address, data) {
 // Functions to read from and write to memory.
 // If these interact with data/status registers, other memory may be changed!
 // If you just want to purely inspect the data, use (get|set)Memory instead.
-LC3.prototype.readMemory = function(address) {
+LC3.prototype.readMemory = function (address) {
     if (address === this.kbdr) {
         // Reading KBDR: must turn off KBSR.
         this.setMemory(this.kbsr, this.getMemory(this.kbsr) & 0x7FFF);
     }
     return this.getMemory(address);
 }
-LC3.prototype.writeMemory = function(address, data) {
+LC3.prototype.writeMemory = function (address, data) {
     if (address === this.ddr) {
         // Writing DDR: must turn of DSR.
         this.setMemory(this.dsr, this.getMemory(this.dsr) & 0x7FFF);
@@ -586,7 +586,7 @@ LC3.prototype.writeMemory = function(address, data) {
 };
 
 // Functions to get and set registers (standard or special)
-LC3.prototype.getRegister = function(register) {
+LC3.prototype.getRegister = function (register) {
     if (!isNaN(register) && register >= 0 && register < this.r.length) {
         return this.r[register];
     }
@@ -598,7 +598,7 @@ LC3.prototype.getRegister = function(register) {
     }
     return undefined;
 }
-LC3.prototype.setRegister = function(register, value) {
+LC3.prototype.setRegister = function (register, value) {
     value = LC3Util.toUint16(value);
     var ev = {
         type: 'regset',
@@ -623,19 +623,19 @@ LC3.prototype.setRegister = function(register, value) {
     return false;
 }
 
-LC3.prototype.resetNumericRegisters = function() {
+LC3.prototype.resetNumericRegisters = function () {
     for (var i = 0; i < this.r.length; i++) {
         this.r[i] = 0;
     }
 }
-LC3.prototype.resetAllRegisters = function() {
+LC3.prototype.resetAllRegisters = function () {
     this.resetNumericRegisters();
     this.pc = 0x3000;
     this.ir = 0;
     this.psr = 0x8002;
 }
 
-LC3.prototype.formatConditionCode = function() {
+LC3.prototype.formatConditionCode = function () {
     var code = this.getConditionCode();
     if (code === undefined) {
         return "Invalid";
@@ -648,12 +648,12 @@ LC3.prototype.formatConditionCode = function() {
     }
 }
 
-LC3.prototype.sendKey = function(character) {
+LC3.prototype.sendKey = function (character) {
     this.bufferedKeys.enqueue(character);
     this.notifyListeners({ type: 'bufferchange' });
 };
 
-LC3.prototype.updateIO = function() {
+LC3.prototype.updateIO = function () {
     // Check keyboard.
     var kbsrValue = this.getMemory(this.kbsr);
     var kbsrReady = (kbsrValue & 0x8000) === 0;
@@ -677,7 +677,7 @@ LC3.prototype.updateIO = function() {
     }
 };
 
-LC3.prototype.clearBufferedKeys = function() {
+LC3.prototype.clearBufferedKeys = function () {
     // This Queue library has no clear function.
     this.bufferedKeys = new Queue();
     this.notifyListeners({ type: 'bufferchange' });
@@ -686,21 +686,21 @@ LC3.prototype.clearBufferedKeys = function() {
 /*
  * Determines whether the clock is running.
  */
-LC3.prototype.isRunning = function() {
+LC3.prototype.isRunning = function () {
     return (this.getMemory(this.mcr) & 0x8000) !== 0;
 }
 
 /*
  * Manually initiates the equivalent of a HALT command.
  */
-LC3.prototype.halt = function() {
+LC3.prototype.halt = function () {
     this.setMemory(this.mcr, this.getMemory(this.mcr) & 0x7FFF);
 }
 
 /*
  * Unhalts the clock after a HALT command.
  */
-LC3.prototype.unhalt = function() {
+LC3.prototype.unhalt = function () {
     this.setMemory(this.mcr, this.getMemory(this.mcr) | 0x8000);
 }
 
@@ -708,7 +708,7 @@ LC3.prototype.unhalt = function() {
  * Load an assembly result into the LC-3.
  * Return true on success, false on failure.
  */
-LC3.prototype.loadAssembled = function(assemblyResult) {
+LC3.prototype.loadAssembled = function (assemblyResult) {
     if (assemblyResult.error) {
         return false;
     }
@@ -718,8 +718,14 @@ LC3.prototype.loadAssembled = function(assemblyResult) {
     var symbols = assemblyResult.symbolTable || {};
 
     // Add all the instructions.
-    for (var i = 0; i < mc.length; i++) {
-        this.setMemory(orig + i, mc[i]);
+    var origs = Object.keys(mc);
+    // This guarantees the addresses will be in the same order each time, avoiding unreliable code.
+    origs.sort();
+    // Loop over all .ORIG addresses and place the code associated with the .ORIG in memory starting at the address
+    for (address of origs) {
+        for (var i = 0; i < mc[address].length; i++) {
+            this.setMemory(parseInt(address) + i, mc[address][i]);
+        }
     }
 
     // Add all the symbols.
@@ -731,7 +737,7 @@ LC3.prototype.loadAssembled = function(assemblyResult) {
     this.setRegister('pc', orig);
 }
 
-LC3.prototype.checkInterrupts = function() {
+LC3.prototype.checkInterrupts = function () {
     // Mask of only the ready and interrupt-enabled bits
     var interruptMask = 0xC000;
     // Check the keyboard
@@ -744,7 +750,7 @@ LC3.prototype.checkInterrupts = function() {
     }
 };
 
-LC3.prototype.interrupt = function(priorityLevel, newPC) {
+LC3.prototype.interrupt = function (priorityLevel, newPC) {
     // Check to see if the new priority level is higher than the current.
     // If not, don't interrupt.
     if (priorityLevel <= ((this.psr & 0x0700) >> 8)) {
