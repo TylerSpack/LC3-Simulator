@@ -322,10 +322,12 @@ var assemble = (function () {
             var orig = _findOrig.orig; // The address of the first .ORIG (where the program will begin at runtime)
             var begin = _findOrig.begin; // The array index of tokenizedLines of the first instruction/directive
 
-            var symbolTable = buildSymbolTable(tokenizedLines, orig, begin);
+            var _buildSymbolTable = buildSymbolTable(tokenizedLines, orig, begin);
+            var symbolTable = _buildSymbolTable.symbolTable;
+            var directiveMemoryMap = _buildSymbolTable.directiveMemoryMap; // for visual purposes only
 
             var machineCode = generateMachineCode(tokenizedLines, symbolTable, orig, begin);
-            return { orig: orig, symbolTable: symbolTable, machineCode: machineCode };
+            return { orig: orig, symbolTable: symbolTable, machineCode: machineCode, directiveMemoryMap: directiveMemoryMap };
         })(text);
 
         if (result.success) {
@@ -672,7 +674,8 @@ var assemble = (function () {
         var initialState = {
             symbols: {},
             address: orig,
-            seenEndDirective: false
+            seenEndDirective: false,
+            directiveMemoryMap: []
         };
         var checkBounds = function checkBounds(address) {
             var max = Constants.MEMORY_SIZE;
@@ -734,6 +737,8 @@ var assemble = (function () {
                     };
                     switch (command.toUpperCase()) {
                         case ".BLKW":
+                            ensureUnary();
+                            return parseLiteral(operands[0]);
                         case ".FILL":
                             ensureUnary();
                             return null; // no need to determine operand value at this stage in assembling - operand is not used in determineRequiredMemory for .FILL
@@ -745,7 +750,15 @@ var assemble = (function () {
                             return null;
                     }
                 })();
-                return advance(state, determineRequiredMemory(command, operand));
+                var requiredMemory = determineRequiredMemory(command, operand);
+                // update directiveMemoryMap
+                if (requiredMemory == 1) {
+                    state.directiveMemoryMap.push([state.address]);
+                }
+                else {
+                    state.directiveMemoryMap.push([state.address, state.address + requiredMemory - 1]);
+                }
+                return advance(state, requiredMemory);
             },
             handleInstruction: function handleInstruction(state, line) {
                 if (state.seenEndDirective) {
@@ -759,8 +772,10 @@ var assemble = (function () {
         if (!finalState.seenEndDirective) {
             throw new Error("no .END directive found!");
         }
-
-        return finalState.symbols;
+        // sort directiveMemoryMap so it can be used properly later
+        finalState.directiveMemoryMap.sort((a, b) => a[0] - b[0]);
+        
+        return { symbolTable: finalState.symbols, directiveMemoryMap: finalState.directiveMemoryMap};
     }
 
     /*
@@ -1043,6 +1058,7 @@ var assemble = (function () {
     }
 
     function reduceProgram(lines, begin, handlers, initialState) {
+        // id is used to return state if we don't have a handler for the instruction/directive
         var id = function id(x) {
             return x;
         };

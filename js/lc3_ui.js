@@ -250,12 +250,33 @@ $(document).ready(function() {
         var $cellLabel = $row.find('span.memory-label');
         var $cellHex = $row.find('span.memory-hex');
         var $cellInstruction = $row.find('span.memory-instruction');
+        var $cellDirectivePos = $row.find('span.memory-directive-pos');
 
         $dropdown.data('address', address);
         $cellAddress.text(LC3Util.toHexString(address));
         $cellLabel.text(lc3.addressToLabel[address] || '');
         $cellHex.text(LC3Util.toHexString(data));
         $cellInstruction.text(lc3.instructionAddressToString(address));
+
+        // Determine if address is generated from a directive
+        $cellDirectivePos.text(""); // Clear original text - replace below if address is part of a directive
+        //search directiveMemoryMap to see if address falls into any range (directiveMemoryMap must be sorted - sorted at assembly time)
+        for (var i = 0; i < lc3.directiveMemoryMap.length; i++) {
+            if (address >= lc3.directiveMemoryMap[i][0]) {
+                if (lc3.directiveMemoryMap[i][1]) {
+                    if (address <= lc3.directiveMemoryMap[i][1]) {
+                        var addressDirectivePos = address - lc3.directiveMemoryMap[i][0] + 1
+                        var directiveLength = lc3.directiveMemoryMap[i][1] - lc3.directiveMemoryMap[i][0] + 1;
+                        $cellDirectivePos.text(addressDirectivePos + "/" + directiveLength);
+                    }
+                }
+                else {
+                    if (address == lc3.directiveMemoryMap[i][0]) {
+                        $cellDirectivePos.text("1/1");
+                    }
+                }
+            }
+        }
 
         // Highlight the program counter.
         var pcClass = 'btn-primary';
@@ -818,6 +839,7 @@ $(document).ready(function() {
             $row.append(createCell('memory-label'));
             $row.append(createCell('memory-hex hex-value hex-signed hex-editable'));
             $row.append(createCell('memory-instruction'));
+            $row.append(createCell('memory-directive-pos'));
             $cellTableBody.append($row);
             memoryRows[i] = $row;
         }

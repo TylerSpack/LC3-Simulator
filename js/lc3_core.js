@@ -6,6 +6,10 @@ var LC3 = function () {
         this.memory[i] = (osEntry === undefined) ? 0 : osEntry;
     }
 
+    // ONLY FOR DISPLAY PURPOSES - initialize array for ranges of memory that were generated using a directive
+    // ex. [[12290], [12292, 12294], [12296], [12297, 12298]]
+    this.directiveMemoryMap = [];
+
     // Listeners for when registers, memory, etc. are changed
     this.listeners = [];
     this.addListener = function (callback) {
@@ -716,6 +720,7 @@ LC3.prototype.loadAssembled = function (assemblyResult) {
     var orig = assemblyResult.orig;
     var mc = assemblyResult.machineCode;
     var symbols = assemblyResult.symbolTable || {};
+    this.directiveMemoryMap = assemblyResult.directiveMemoryMap;
 
     // Add all the instructions.
     var origs = Object.keys(mc);
