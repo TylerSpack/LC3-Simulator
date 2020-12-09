@@ -1,37 +1,37 @@
 // Transpiled via Babel.
 // You can find the source at github:wchargin/lc3 in src/core/assemble.js.
 // I'll publish the new version when it's ready! :)
-var assemble = (function() {
+var assemble = (function () {
     if (!Array.prototype.includes) {
-      Array.prototype.includes = function(searchElement /*, fromIndex*/ ) {
-        'use strict';
-        var O = Object(this);
-        var len = parseInt(O.length) || 0;
-        if (len === 0) {
-          return false;
-        }
-        var n = parseInt(arguments[1]) || 0;
-        var k;
-        if (n >= 0) {
-          k = n;
-        } else {
-          k = len + n;
-          if (k < 0) {k = 0;}
-        }
-        var currentElement;
-        while (k < len) {
-          currentElement = O[k];
-          if (searchElement === currentElement ||
-             (searchElement !== searchElement && currentElement !== currentElement)) {
-            return true;
-          }
-          k++;
-        }
-        return false;
-      };
+        Array.prototype.includes = function (searchElement /*, fromIndex*/) {
+            'use strict';
+            var O = Object(this);
+            var len = parseInt(O.length) || 0;
+            if (len === 0) {
+                return false;
+            }
+            var n = parseInt(arguments[1]) || 0;
+            var k;
+            if (n >= 0) {
+                k = n;
+            } else {
+                k = len + n;
+                if (k < 0) { k = 0; }
+            }
+            var currentElement;
+            while (k < len) {
+                currentElement = O[k];
+                if (searchElement === currentElement ||
+                    (searchElement !== searchElement && currentElement !== currentElement)) {
+                    return true;
+                }
+                k++;
+            }
+            return false;
+        };
     }
     if (!String.prototype.includes) {
-        String.prototype.includes = function() {
+        String.prototype.includes = function () {
             'use strict';
             if (typeof arguments[1] === "number") {
                 if (this.length < arguments[0].length + arguments[1].length) {
@@ -351,8 +351,8 @@ var assemble = (function() {
         var e = new Error('Invalid numeric literal: \'' + text + '\'');
         var first = text.charAt(0);
         if (first !== '#'
-                && first.toLowerCase() !== 'x'
-                && first.toLowerCase() !== 'b') {
+            && first.toLowerCase() !== 'x'
+            && first.toLowerCase() !== 'b') {
             throw e;
         }
 
@@ -720,7 +720,7 @@ var assemble = (function() {
                         case ".BLKW":
                         case ".FILL":
                             ensureUnary();
-                            return parseLiteral(operands[0]);
+                            return null; //no need to determine operand value at this stage in assembling - operand is not used in determineRequiredMemory for .FILL
                         case ".STRINGZ":
                             ensureUnary();
                             return operands[0]; // already a string, from tokenize
@@ -796,12 +796,20 @@ var assemble = (function() {
      * so these don't need to be passed in as arguments.
      */
 
-    function encodeDirective(tokens) {
+    function encodeDirective(tokens, symbols) {
         var directive = tokens[0];
         var operand = tokens[1];
 
         switch (directive.toUpperCase()) {
             case ".FILL":
+                // If not a literal value, check if operand is a known symbol.
+                var first = operand.charAt(0);
+                if (!['#', 'x', 'b'].includes(first.toLowerCase())) {
+                    if (!(operand in symbols)) {
+                        throw new Error('the offset \'' + operand + '\' is not a valid numeric literal, ' + 'but I can\'t find it in the symbol table either; ' + 'did you misspell a label name?');
+                    }
+                    return [symbols[operand]];
+                }
                 return [Utils.toUint16(parseLiteral(operand))];
             case ".BLKW":
                 return new Array(Utils.toUint16(parseLiteral(operand))).fill(0);
@@ -927,9 +935,9 @@ var assemble = (function() {
             ensureOpcount(1);
 
             var _ref = upname === "BR" ? [true, true, true] : // plain "BR" is an unconditional branch
-            ["N", "Z", "P"].map(function (x) {
-                return upname.substring(2).includes(x);
-            });
+                ["N", "Z", "P"].map(function (x) {
+                    return upname.substring(2).includes(x);
+                });
 
             var _ref2 = _slicedToArray(_ref, 3);
 
@@ -1001,7 +1009,7 @@ var assemble = (function() {
                 if (state.seenEndDirective) {
                     return state;
                 }
-                return appendCode(state, encodeDirective(line));
+                return appendCode(state, encodeDirective(line, symbols));
             },
             handleInstruction: function handleInstruction(state, line) {
                 if (state.seenEndDirective) {
