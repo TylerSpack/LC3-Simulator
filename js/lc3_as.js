@@ -725,6 +725,10 @@ var assemble = (function () {
 
                 var _line2 = _toArray(line);
 
+                var directiveMemoryEntry = {
+                    start: state.address
+                };
+
                 var command = _line2[0];
 
                 var operands = _line2.slice(1);
@@ -744,6 +748,7 @@ var assemble = (function () {
                             return null; // no need to determine operand value at this stage in assembling - operand is not used in determineRequiredMemory for .FILL
                         case ".STRINGZ":
                             ensureUnary();
+                            directiveMemoryEntry.isSTRINGZ = true;
                             return operands[0]; // already a string, from tokenize
                         default:
                             // encodeDirective will throw an error at assembly time
@@ -752,12 +757,10 @@ var assemble = (function () {
                 })();
                 var requiredMemory = determineRequiredMemory(command, operand);
                 // update directiveMemoryMap
-                if (requiredMemory == 1) {
-                    state.directiveMemoryMap.push([state.address]);
+                if (requiredMemory > 1) {
+                    directiveMemoryEntry.end = state.address + requiredMemory - 1;
                 }
-                else {
-                    state.directiveMemoryMap.push([state.address, state.address + requiredMemory - 1]);
-                }
+                state.directiveMemoryMap.push(directiveMemoryEntry);
                 return advance(state, requiredMemory);
             },
             handleInstruction: function handleInstruction(state, line) {
@@ -773,9 +776,9 @@ var assemble = (function () {
             throw new Error("no .END directive found!");
         }
         // sort directiveMemoryMap so it can be used properly later
-        finalState.directiveMemoryMap.sort((a, b) => a[0] - b[0]);
-        
-        return { symbolTable: finalState.symbols, directiveMemoryMap: finalState.directiveMemoryMap};
+        finalState.directiveMemoryMap.sort((a, b) => a.start - b.start);
+
+        return { symbolTable: finalState.symbols, directiveMemoryMap: finalState.directiveMemoryMap };
     }
 
     /*

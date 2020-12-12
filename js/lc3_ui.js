@@ -1,4 +1,4 @@
-$(document).ready(function() {
+$(document).ready(function () {
     var lc3 = new LC3();
     window.lc3 = lc3; // for ease of debugging
 
@@ -133,7 +133,7 @@ $(document).ready(function() {
      * It just gets information about, e.g.,
      * how many times people click "Assemble," etc.
      */
-    var sendEvent = function(category, action, label) {
+    var sendEvent = function (category, action, label) {
         if (window.ga) {
             window.ga('send', 'event', category, action, label);
         }
@@ -148,7 +148,7 @@ $(document).ready(function() {
      * Newlines will be converted to the desired format.
      * Other characters will pass through unchanged.
      */
-    var standardizeChar = function(key) {
+    var standardizeChar = function (key) {
         if (newlines.indexOf(key) === -1) {
             // It's not a newline; let it pass unfiltered.
             return key;
@@ -158,7 +158,7 @@ $(document).ready(function() {
         }
     };
 
-    var toggleBreakpoint = function(address) {
+    var toggleBreakpoint = function (address) {
         if (address in breakpoints) {
             delete breakpoints[address];
         } else {
@@ -171,7 +171,7 @@ $(document).ready(function() {
      * Callback function invoked when a value is edited by the user,
      * and memory and/or the display should be updated.
      */
-    var updateValue = function(linkage, value) {
+    var updateValue = function (linkage, value) {
         var type = linkage.type;
         if (type === 'address') {
             var address = linkage.address;
@@ -184,7 +184,7 @@ $(document).ready(function() {
         }
     };
 
-    var updateBufferCount = function() {
+    var updateBufferCount = function () {
         var count = lc3.bufferedKeys.getLength();
         $('#buffered-char-count').text(count.toString());
         $('#buffered-char-noun').text(count === 1 ? 'character' : 'characters');
@@ -236,7 +236,7 @@ $(document).ready(function() {
     /*
      * Update a single row in memory to reflect changes in the model.
      */
-    var updateMemoryRow = function(address) {
+    var updateMemoryRow = function (address) {
         var row = address - currentMemoryLocation;
         if (row < 0 || row >= memoryRows.length) {
             // This row isn't currently displayed.
@@ -250,7 +250,7 @@ $(document).ready(function() {
         var $cellLabel = $row.find('span.memory-label');
         var $cellHex = $row.find('span.memory-hex');
         var $cellInstruction = $row.find('span.memory-instruction');
-        var $cellDirectivePos = $row.find('span.memory-directive-pos');
+        var $cellDirectiveInfo = $row.find('span.memory-directive-info');
 
         $dropdown.data('address', address);
         $cellAddress.text(LC3Util.toHexString(address));
@@ -259,20 +259,42 @@ $(document).ready(function() {
         $cellInstruction.text(lc3.instructionAddressToString(address));
 
         // Determine if address is generated from a directive
-        $cellDirectivePos.text(""); // Clear original text - replace below if address is part of a directive
-        //search directiveMemoryMap to see if address falls into any range (directiveMemoryMap must be sorted - sorted at assembly time)
+        $cellDirectiveInfo.text(""); // Clear original text - replace below if address is part of a directive
+        // search directiveMemoryMap to see if address falls into any range (directiveMemoryMap must be sorted - sorted at assembly time)
         for (var i = 0; i < lc3.directiveMemoryMap.length; i++) {
-            if (address >= lc3.directiveMemoryMap[i][0]) {
-                if (lc3.directiveMemoryMap[i][1]) {
-                    if (address <= lc3.directiveMemoryMap[i][1]) {
-                        var addressDirectivePos = address - lc3.directiveMemoryMap[i][0] + 1
-                        var directiveLength = lc3.directiveMemoryMap[i][1] - lc3.directiveMemoryMap[i][0] + 1;
-                        $cellDirectivePos.text(addressDirectivePos + "/" + directiveLength);
+            if (address >= lc3.directiveMemoryMap[i].start) {
+                // Because the map is sorted, the address has to be within lc3.directiveMemoryMap[i]
+                // to be a directive. We can safetly break this loop if it isn't.
+                if (address != lc3.directiveMemoryMap[i].start) {
+                    if (lc3.directiveMemoryMap[i].end) {
+                        if (address > lc3.directiveMemoryMap[i].end) {
+                            break; // The address wasn't at the start, and wasn't before the end.
+                        }
+                    }
+                    else {
+                        break; // The address wasn't at the start, and there wasn't an end.
+                    }
+                }
+                if (lc3.directiveMemoryMap[i].isSTRINGZ) {
+                    if (data <= 31) {
+                        $cellDirectiveInfo.text("x" + (data <= 16 ? "0" : "") + data.toString(16).toUpperCase());
+                    }
+                    else {
+                        $cellDirectiveInfo.text("'" + String.fromCharCode(data) + "'");
                     }
                 }
                 else {
-                    if (address == lc3.directiveMemoryMap[i][0]) {
-                        $cellDirectivePos.text("1/1");
+                    if (lc3.directiveMemoryMap[i].end) {
+                        if (address <= lc3.directiveMemoryMap[i].end) {
+                            var directivePos = address - lc3.directiveMemoryMap[i].start + 1
+                            var directiveLength = lc3.directiveMemoryMap[i].end - lc3.directiveMemoryMap[i].start + 1;
+                            $cellDirectiveInfo.text(directivePos + "/" + directiveLength);
+                        }
+                    }
+                    else {
+                        if (address == lc3.directiveMemoryMap[i].start) {
+                            $cellDirectiveInfo.text("1/1");
+                        }
                     }
                 }
             }
@@ -299,7 +321,7 @@ $(document).ready(function() {
      * Display a block of memory starting at the given location.
      * All rows will be updated.
      */
-    var displayMemory = function(startPosition) {
+    var displayMemory = function (startPosition) {
         // If the user inputs, e.g., 0xFFFF, that's a valid value,
         // but the remaining fifteen would not be. Clamp them out.
         var max = lc3.memory.length - memoryRows.length;
@@ -336,7 +358,7 @@ $(document).ready(function() {
     /*
      * Refresh the current memory display to reflect any changes.
      */
-    var refreshMemoryDisplay = function() {
+    var refreshMemoryDisplay = function () {
         displayMemory(currentMemoryLocation);
         if (batchMode) {
             $('#memory-table').addClass('disabled');
@@ -348,7 +370,7 @@ $(document).ready(function() {
     /*
      * Scrolls to the PC if it is not already in view.
      */
-    var followPC = function() {
+    var followPC = function () {
         var offset = lc3.pc - currentMemoryLocation;
         if (offset < 0 || offset >= memoryRows.length) {
             // Give a little bit of pre-context
@@ -359,7 +381,7 @@ $(document).ready(function() {
     /*
      * Updates the given register display with the new value.
      */
-    var updateRegister = function(register) {
+    var updateRegister = function (register) {
         var $register = registers[register];
         if (register === 'cc') {
             $register.text(lc3.formatConditionCode());
@@ -368,7 +390,7 @@ $(document).ready(function() {
         }
     };
 
-    var refreshRegisters = function() {
+    var refreshRegisters = function () {
         for (var registerID in registers) {
             updateRegister(registerID);
         }
@@ -377,7 +399,7 @@ $(document).ready(function() {
     /*
      * Enter batch mode. The 'target' variable should already be set.
      */
-    var enterBatchMode = function() {
+    var enterBatchMode = function () {
         batchMode = true;
 
         // Update form controls disabled status.
@@ -386,7 +408,7 @@ $(document).ready(function() {
         refreshMemoryDisplay();
 
         lastInstructionComplete = true;
-        intervalID = setInterval(function() {
+        intervalID = setInterval(function () {
             if (!lastInstructionComplete) {
                 // We'll get it at the next interval.
                 return;
@@ -436,7 +458,7 @@ $(document).ready(function() {
     /*
      * Exit batch mode and refresh all displays to account for any changes.
      */
-    var exitBatchMode = function() {
+    var exitBatchMode = function () {
         batchMode = false;
 
         refreshMemoryDisplay();
@@ -453,10 +475,10 @@ $(document).ready(function() {
     /*
      * Updates the 'disabled' state of dynamically disabled (.dyndis) buttons.
      */
-    var updateButtons = function() {
+    var updateButtons = function () {
         var running = batchMode;
         var halted = !lc3.isRunning();
-        $('.dyndis').each(function() {
+        $('.dyndis').each(function () {
             var disabled = false;
             var $this = $(this);
             if ($this.hasClass('disabled-running')) {
@@ -479,7 +501,7 @@ $(document).ready(function() {
      * Jump to the memory location (or label) listed in the search field.
      * Display an error alert to the user if the location is invalid.
      */
-    var performJumpTo = function() {
+    var performJumpTo = function () {
         var $invalid = $('#error-address-invalid');
         var $bounds = $('#error-address-bounds');
 
@@ -532,8 +554,8 @@ $(document).ready(function() {
     };
 
     // Set up listeners for memory scrolling controls.
-    (function() {
-        $('#mem-jumpto-activate').click(function() {
+    (function () {
+        $('#mem-jumpto-activate').click(function () {
             $('#mem-jumpto').focus();
         });
         $('#mem-jumpto').on('input', performJumpTo);
@@ -543,15 +565,15 @@ $(document).ready(function() {
             }
         });
 
-        $('#mem-jump-pc').click(function() {
+        $('#mem-jump-pc').click(function () {
             displayMemory(lc3.pc);
             $(this).blur();
         });
-        $('#mem-scroll-up').click(function() {
+        $('#mem-scroll-up').click(function () {
             displayMemory(currentMemoryLocation - 1);
             $(this).blur();
         });
-        $('#mem-scroll-down').click(function() {
+        $('#mem-scroll-down').click(function () {
             displayMemory(currentMemoryLocation + 1);
             $(this).blur();
         });
@@ -560,7 +582,7 @@ $(document).ready(function() {
         $newLabelRow.find('.error-feedback').hide();
         var $template = $newLabelRow.clone().prop('id', '');
         $newLabelRow.find('button, .label-address').remove();
-        var createLabelRow = function(text, address, exists) {
+        var createLabelRow = function (text, address, exists) {
             var $row = $template.clone();
             $row.insertBefore($newLabelRow);
 
@@ -591,7 +613,7 @@ $(document).ready(function() {
             $address.data('linkage', linkage_);
             $remove.data('linkage', linkage_);
 
-            $name.on('input', function() {
+            $name.on('input', function () {
                 var linkage = $(this).data('linkage');
                 var oldName = $(this).data('old-name');
                 var newName = $(this).val();
@@ -637,7 +659,7 @@ $(document).ready(function() {
                 linkage.hasError.name = error;
             });
 
-            $address.on('input', function() {
+            $address.on('input', function () {
                 var linkage = $(this).data('linkage');
                 var num = LC3Util.parseNumber($(this).val());
 
@@ -669,7 +691,7 @@ $(document).ready(function() {
                 linkage.hasError.address = error;
             });
 
-            var update = function() {
+            var update = function () {
                 var linkage = $(this).data('linkage');
                 if (linkage.hasError.name || linkage.hasError.address) {
                     return;
@@ -689,7 +711,7 @@ $(document).ready(function() {
             $address.on('input', update);
 
 
-            $remove.click(function() {
+            $remove.click(function () {
                 var linkage = $(this).data('linkage');
                 if (linkage.previous.exists !== null) {
                     lc3.unsetLabelGivenName(linkage.previous.labelName);
@@ -697,16 +719,16 @@ $(document).ready(function() {
                 $(this).closest('tr').remove();
             });
         };
-        $newLabelRow.find('.label-name').on('input', function() {
+        $newLabelRow.find('.label-name').on('input', function () {
             createLabelRow($(this).val(), null, false);
             $(this).val('');
         });
 
-        $('#manage-labels-button').click(function() {
+        $('#manage-labels-button').click(function () {
             $('#label-manager').modal('show');
             sendEvent('labels', 'open_labels_modal');
         });
-        $('#label-manager').on('show.bs.modal', function() {
+        $('#label-manager').on('show.bs.modal', function () {
             // Remove all rows except for the last (the new label row)
             $(this).find('tbody tr:not(:last)').remove();
             // Recreate from memory
@@ -719,7 +741,7 @@ $(document).ready(function() {
 
 
     // Add the registers.
-    (function() {
+    (function () {
         var $registersPrimary = $('#registers-primary');
         for (var i = 0; i < lc3.r.length; i++) {
             var name = 'R' + i;
@@ -780,7 +802,7 @@ $(document).ready(function() {
     })();
 
     // Add the memory addresses and set up the memory display.
-    (function() {
+    (function () {
         var $cellTableBody = $('#memory-table tbody');
         for (var i = 0; i < memoryRows.length; i++) {
             var $row = $('<tr>');
@@ -803,24 +825,24 @@ $(document).ready(function() {
             // We can't use $dropdown in callbacks because of closure semantics.
             // Attach it to the items instead.
             // This helper function does that (and a bit more).
-            var createDropdownItem = function(name) {
+            var createDropdownItem = function (name) {
                 return $('<a>').prop('href', '#').prop('role', 'button')
-                        .text(name)
-                        .data('dropdown', $dropdown)
-                        .appendTo($('<li>').appendTo($dropdownList));
+                    .text(name)
+                    .data('dropdown', $dropdown)
+                    .appendTo($('<li>').appendTo($dropdownList));
             };
 
             var $pc;
             var $bp;
-            $pc = createDropdownItem('Move PC here').click(function() {
+            $pc = createDropdownItem('Move PC here').click(function () {
                 lc3.setRegister('pc', $(this).data('dropdown').data('address'));
             });
-            $bp = createDropdownItem('Set breakpoint here').click(function() {
+            $bp = createDropdownItem('Set breakpoint here').click(function () {
                 toggleBreakpoint($(this).data('dropdown').data('address'));
             }).addClass('breakpoint-toggle');
             // We want to update the breakpoint text when the dropdown activates.
             // (It should be a toggle.)
-            $dropdown.click(function() {
+            $dropdown.click(function () {
                 var local$bp = $(this).parent().find('.breakpoint-toggle'); // again, closures
                 if ($(this).data('address') in breakpoints) {
                     local$bp.text('Clear this breakpoint');
@@ -830,7 +852,7 @@ $(document).ready(function() {
             });
 
             // Actual cell text values will be filled in later (updateMemoryRow).
-            var createCell = function(classes) {
+            var createCell = function (classes) {
                 return $('<td>').append($('<span>').addClass(classes));
             };
 
@@ -839,7 +861,7 @@ $(document).ready(function() {
             $row.append(createCell('memory-label'));
             $row.append(createCell('memory-hex hex-value hex-signed hex-editable'));
             $row.append(createCell('memory-instruction'));
-            $row.append(createCell('memory-directive-pos'));
+            $row.append(createCell('memory-directive-info'));
             $cellTableBody.append($row);
             memoryRows[i] = $row;
         }
@@ -850,10 +872,10 @@ $(document).ready(function() {
     $('.hex-editable').popover({
         html: true,
         container: 'body',
-        title: function() {
+        title: function () {
             return 'Edit value of ' + $(this).data('edit-linkage').name;
         },
-        content: function() {
+        content: function () {
             var $oldThis = $(this);
             var linkage = $(this).data('edit-linkage');
 
@@ -864,27 +886,27 @@ $(document).ready(function() {
             var $inputBar = $('<div>').addClass('input-group').appendTo($container);
             var $icon = $('<span>').addClass('glyphicon glyphicon-pencil');
             var $iconSpan = $('<span>')
-                            .addClass('input-group-addon')
-                            .append($icon)
-                            .appendTo($inputBar);
+                .addClass('input-group-addon')
+                .append($icon)
+                .appendTo($inputBar);
             var $field = $('<input>')
-                         .prop('type', 'text')
-                         .addClass('hex-value form-control hex-edit-field')
-                         .val($(this).text())
-                         .appendTo($inputBar);
+                .prop('type', 'text')
+                .addClass('hex-value form-control hex-edit-field')
+                .val($(this).text())
+                .appendTo($inputBar);
 
             // List of errors.
-            var $ul =  $('<ul>').appendTo($('<div>').appendTo($container)).addClass('error-list');
+            var $ul = $('<ul>').appendTo($('<div>').appendTo($container)).addClass('error-list');
             var $msgValid = $('<li>').text('Invalid number').appendTo($ul);
 
             // Buttons to submit or cancel.
             var $buttons = $('<div>').addClass('btn-group');
             $('<div>').addClass('text-center').append($buttons).appendTo($container);
 
-            var doCancel = function() {
+            var doCancel = function () {
                 $oldThis.popover('hide');
             };
-            var doSubmit = function() {
+            var doSubmit = function () {
                 $oldThis.popover('hide');
                 var num = LC3Util.toUint16(LC3Util.parseNumber($field.val()));
                 updateValue(linkage, num);
@@ -899,7 +921,7 @@ $(document).ready(function() {
                 .click(doSubmit);
 
             // Handler to validate when changed
-            $field.on('input', function() {
+            $field.on('input', function () {
                 var text = $(this).val();
                 var num = LC3Util.parseNumber(text);
 
@@ -929,7 +951,7 @@ $(document).ready(function() {
 
                 // Update submit button
                 $submit.prop('disabled', !valid);
-            }).keydown(function(e) {
+            }).keydown(function (e) {
                 if (e.keyCode === 13) { // Enter
                     $submit.click();
                 }
@@ -938,13 +960,13 @@ $(document).ready(function() {
             return $container;
         },
         trigger: 'click'
-    }).on('shown.bs.popover', function() {
+    }).on('shown.bs.popover', function () {
         $('.hex-edit-field').focus().select();
     });
 
     // Set up hex-value tooltips.
-    (function() {
-        var hexValueTooltipTitle = function() {
+    (function () {
+        var hexValueTooltipTitle = function () {
             if ($(this).hasClass('hex-no-tooltip')) {
                 return;
             }
@@ -961,17 +983,17 @@ $(document).ready(function() {
             var titleText = prefix + numString + suffix;
             return titleText;
         };
-        $('.hex-value').not('.hex-no-tooltip').tooltip( { title: hexValueTooltipTitle });
+        $('.hex-value').not('.hex-no-tooltip').tooltip({ title: hexValueTooltipTitle });
     })();
 
     // Set up register-reset buttons
-    (function() {
-        $('#reset-numeric').click(function() {
+    (function () {
+        $('#reset-numeric').click(function () {
             lc3.resetNumericRegisters();
             refreshRegisters();
             sendEvent('controls', 'reset_numeric');
         });
-        $('#reset-registers').click(function() {
+        $('#reset-registers').click(function () {
             lc3.resetAllRegisters();
             refreshRegisters();
             refreshMemoryDisplay();
@@ -983,8 +1005,8 @@ $(document).ready(function() {
     })();
 
     // Set up execution control buttons.
-    (function() {
-        $('#control-step').click(function() {
+    (function () {
+        $('#control-step').click(function () {
             lc3.nextInstruction();
             if ($('#follow-pc').prop('checked')) {
                 followPC();
@@ -993,25 +1015,25 @@ $(document).ready(function() {
             refreshRegisters();
             sendEvent('controls', 'controls_step');
         });
-        $('#control-next').click(function() {
+        $('#control-next').click(function () {
             // Keep going until we get back to this level.
             target = lc3.subroutineLevel;
             enterBatchMode();
             sendEvent('controls', 'controls_next');
         });
-        $('#control-continue').click(function() {
+        $('#control-continue').click(function () {
             // Machine was paused or hit a breakpoint.
             // Keep the original target level.
             enterBatchMode();
             sendEvent('controls', 'controls_continue');
         });
-        $('#control-finish').click(function() {
+        $('#control-finish').click(function () {
             // Keep going until we go one level up.
             target = lc3.subroutineLevel - 1;
             enterBatchMode();
             sendEvent('controls', 'controls_finish');
         });
-        $('#control-run').click(function() {
+        $('#control-run').click(function () {
             // Keep going forever.
             // -1 isn't good enough:
             // if there are more RETs than JSR/JSRR/TRAPs,
@@ -1024,11 +1046,11 @@ $(document).ready(function() {
             enterBatchMode();
             sendEvent('controls', 'controls_run');
         });
-        $('#control-pause').click(function() {
+        $('#control-pause').click(function () {
             exitBatchMode();
             sendEvent('controls', 'controls_pause');
         });
-        $('#control-unhalt').click(function() {
+        $('#control-unhalt').click(function () {
             lc3.unhalt();
             $('.exception').slideUp();
             updateButtons();
@@ -1040,34 +1062,34 @@ $(document).ready(function() {
     })();
 
     // Set up console for key events and clear buttons.
-    (function() {
-        $('#console-contents').focus(function() {
+    (function () {
+        $('#console-contents').focus(function () {
             $(this).addClass('bg-info');
-        }).blur(function() {
+        }).blur(function () {
             $(this).removeClass('bg-info');
         })
-        // IE does weird stuff with ignoring some keypress events.
-        // To work around, we handle <Enter> separately, in keydown.
-        .keypress(function(e) {
-            var key = e.which;
-            if (newlines.indexOf(key) !== -1) {
-                // Newlines handled in keydown
-                return;
-            }
-            lc3.sendKey(standardizeChar(key));
-        }).keydown(function(e) {
-            var key = e.which;
-            if (newlines.indexOf(key) === -1) {
-                // Non-newlines handled in keypress
-                return;
-            }
-            lc3.sendKey(standardizeChar(key));
-        });
+            // IE does weird stuff with ignoring some keypress events.
+            // To work around, we handle <Enter> separately, in keydown.
+            .keypress(function (e) {
+                var key = e.which;
+                if (newlines.indexOf(key) !== -1) {
+                    // Newlines handled in keydown
+                    return;
+                }
+                lc3.sendKey(standardizeChar(key));
+            }).keydown(function (e) {
+                var key = e.which;
+                if (newlines.indexOf(key) === -1) {
+                    // Non-newlines handled in keypress
+                    return;
+                }
+                lc3.sendKey(standardizeChar(key));
+            });
 
-        $('#btn-clear-in').click(function() {
+        $('#btn-clear-in').click(function () {
             lc3.clearBufferedKeys();
         });
-        $('#btn-clear-out').click(function() {
+        $('#btn-clear-out').click(function () {
             $('#console-contents').text('');
         });
 
@@ -1075,8 +1097,8 @@ $(document).ready(function() {
     })();
 
     // Link newline radio buttons to model
-    (function() {
-        $('#newline-select input[type=radio]').change(function() {
+    (function () {
+        $('#newline-select input[type=radio]').change(function () {
             var newline = $(this).data('newline');
             if (newline === 'binary') {
                 preferredNewline = null;
@@ -1088,15 +1110,15 @@ $(document).ready(function() {
     })();
 
     // Configure the upload modal
-    (function() {
-        var importObj = function(file) {
+    (function () {
+        var importObj = function (file) {
             var reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 // Use a Uint16Array has platform-dependent endianness (!!!).
                 // Must manually use a Uint8Array to force little-endian.
                 var raw = new Uint8Array(e.target.result);
                 var data = new Array(raw.length / 2);
-                for (var i = 0; i < data.length; i ++) {
+                for (var i = 0; i < data.length; i++) {
                     var lo = raw[2 * i + 1];
                     var hi = raw[2 * i] << 8;
                     data[i] = lo | hi;
@@ -1111,9 +1133,9 @@ $(document).ready(function() {
             };
             reader.readAsArrayBuffer(file);
         };
-        var importSym = function(file) {
+        var importSym = function (file) {
             var reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 var dataString = e.target.result;
                 var lines = dataString.split(/[\r\n]/);
                 for (var i = 0; i < lines.length; i++) {
@@ -1161,19 +1183,19 @@ $(document).ready(function() {
         // mostly copied from:
         // http://stackoverflow.com/a/6480317/732016
         $dropArea.bind({
-            dragover: function() {
+            dragover: function () {
                 $dropBox.addClass('hover');
                 return false;
             },
-            dragend: function() {
+            dragend: function () {
                 $dropBox.removeClass('hover');
                 return false;
             },
-            dragleave: function() {
+            dragleave: function () {
                 $dropBox.removeClass('hover');
                 return false;
             },
-            drop: function(e) {
+            drop: function (e) {
                 $dropBox.removeClass('hover');
                 e = e || window.event;
                 e.preventDefault();
@@ -1212,7 +1234,7 @@ $(document).ready(function() {
                             .appendTo($invalidList);
                         $invalid.slideDown();
                         $invalid.find('#warning-file-noun').text(
-                                $invalidList.find('li').length === 1 ? 'file' : 'files');
+                            $invalidList.find('li').length === 1 ? 'file' : 'files');
                     } else {
                         var $li = $('<li>')
                             .append($('<strong>').text(filename || ''))
@@ -1230,16 +1252,16 @@ $(document).ready(function() {
                 }
             }
         });
-        $invalid.find('#invalid-dismiss').click(function() {
-            $invalid.slideUp(function() {
+        $invalid.find('#invalid-dismiss').click(function () {
+            $invalid.slideUp(function () {
                 $invalidList.empty();
             });
         });
-        $invalid.find('#invalid-open-assembler').click(function() {
+        $invalid.find('#invalid-open-assembler').click(function () {
             $modal.modal('hide');
             $('#assemble-modal').modal('show');
         });
-        $('#success-confirm').click(function() {
+        $('#success-confirm').click(function () {
             $dropArea.slideUp();
             $invalid.slideUp();
             $success.slideUp();
@@ -1275,7 +1297,7 @@ $(document).ready(function() {
             $bar.removeClass('progress-bar-striped');
             $modal.modal('hide');
         });
-        $modal.on('show.bs.modal', function() {
+        $modal.on('show.bs.modal', function () {
             filesToProcess = {};
             existingFiles = {};
             $dropArea.show();
@@ -1288,15 +1310,15 @@ $(document).ready(function() {
     })();
 
     // Upload object
-    (function() {
-        $('#mem-upload-object').click(function() {
+    (function () {
+        $('#mem-upload-object').click(function () {
             sendEvent('upload', 'open_upload_modal');
             $('#load-object').modal();
         });
     })();
 
     // Configure the assembly modal
-    (function() {
+    (function () {
         var $modal = $('#assemble-modal');
 
         var $inputContainer = $('#assembly-input-container');
@@ -1314,7 +1336,7 @@ $(document).ready(function() {
         var $errorAlert = $modal.find('.alert-danger');
 
         var assemblyResult = null;
-        $btnAssemble.click(function() {
+        $btnAssemble.click(function () {
             var code = $textarea.val();
             assemblyResult = assemble(code);
             $errorList.empty();
@@ -1331,11 +1353,11 @@ $(document).ready(function() {
                 $errorAlert.slideUp();
             }
         });
-        $btnLoad.click(function() {
+        $btnLoad.click(function () {
             lc3.loadAssembled(assemblyResult);
             $modal.modal('hide');
         });
-        $btnDownloadObject.click(function() {
+        $btnDownloadObject.click(function () {
             if (assemblyResult === null) {
                 return;
             }
@@ -1344,7 +1366,7 @@ $(document).ready(function() {
             var bytes = wordsToBytes([orig].concat(mc));
             doDownload(bytes);
         });
-        $btnDownloadSymbol.click(function() {
+        $btnDownloadSymbol.click(function () {
             if (assemblyResult === null) {
                 return;
             }
@@ -1359,7 +1381,7 @@ $(document).ready(function() {
             for (var symbol in symbols) {
                 tuples.push([symbol, symbols[symbol]]);
             }
-            tuples.sort(function(a, b) { return a[1] - b[1]; });
+            tuples.sort(function (a, b) { return a[1] - b[1]; });
             for (var i = 0; i < tuples.length; i++) {
                 var label = tuples[i][0];
                 var address = tuples[i][1];
@@ -1372,19 +1394,19 @@ $(document).ready(function() {
         });
 
         $inputContainer.bind({
-            dragover: function() {
+            dragover: function () {
                 $releaseMessage.slideDown();
                 return false;
             },
-            dragend: function() {
+            dragend: function () {
                 $releaseMessage.slideUp();
                 return false;
             },
-            dragleave: function() {
+            dragleave: function () {
                 $releaseMessage.slideUp();
                 return false;
             },
-            drop: function(e) {
+            drop: function (e) {
                 e = e || window.event;
                 e = e.originalEvent || e;
                 e.preventDefault();
@@ -1399,7 +1421,7 @@ $(document).ready(function() {
                     return;
                 }
                 var reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = function (e) {
                     var dataString = e.target.result;
                     $textarea.val(dataString);
                 };
@@ -1407,11 +1429,11 @@ $(document).ready(function() {
             }
         });
 
-        $('#mem-assemble').click(function() {
+        $('#mem-assemble').click(function () {
             sendEvent('assemble', 'open_assemble_modal');
             $modal.modal();
         });
-        $modal.bind('show.bs.modal', function() {
+        $modal.bind('show.bs.modal', function () {
             $errorAlert.hide();
             $successAlert.hide();
             $releaseMessage.hide();
@@ -1420,7 +1442,7 @@ $(document).ready(function() {
     })();
 
     // Configure the raw code modal
-    (function() {
+    (function () {
         var $modal = $('#raw-modal');
 
         var $inputContainer = $('#raw-input-container');
@@ -1437,7 +1459,7 @@ $(document).ready(function() {
         var $errorAlert = $modal.find('.alert-danger');
 
         var assemblyResult = null;
-        $btnProcess.click(function() {
+        $btnProcess.click(function () {
             var code = $textarea.val();
             assemblyResult = hexbin(code);
             if (assemblyResult.error) {
@@ -1449,11 +1471,11 @@ $(document).ready(function() {
                 $errorAlert.slideUp();
             }
         });
-        $btnLoad.click(function() {
+        $btnLoad.click(function () {
             lc3.loadAssembled(assemblyResult);
             $modal.modal('hide');
         });
-        $btnDownloadObject.click(function() {
+        $btnDownloadObject.click(function () {
             if (assemblyResult === null) {
                 return;
             }
@@ -1464,19 +1486,19 @@ $(document).ready(function() {
         });
 
         $inputContainer.bind({
-            dragover: function() {
+            dragover: function () {
                 $releaseMessage.slideDown();
                 return false;
             },
-            dragend: function() {
+            dragend: function () {
                 $releaseMessage.slideUp();
                 return false;
             },
-            dragleave: function() {
+            dragleave: function () {
                 $releaseMessage.slideUp();
                 return false;
             },
-            drop: function(e) {
+            drop: function (e) {
                 e = e || window.event;
                 e = e.originalEvent || e;
                 e.preventDefault();
@@ -1491,7 +1513,7 @@ $(document).ready(function() {
                     return;
                 }
                 var reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = function (e) {
                     var dataString = e.target.result;
                     $textarea.val(dataString);
                 };
@@ -1499,11 +1521,11 @@ $(document).ready(function() {
             }
         });
 
-        $('#mem-raw').click(function() {
+        $('#mem-raw').click(function () {
             sendEvent('raw', 'open_raw_modal');
             $modal.modal();
         });
-        $modal.bind('show.bs.modal', function() {
+        $modal.bind('show.bs.modal', function () {
             $errorAlert.hide();
             $successAlert.hide();
             $releaseMessage.hide();

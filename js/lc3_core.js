@@ -7,7 +7,7 @@ var LC3 = function () {
     }
 
     // ONLY FOR DISPLAY PURPOSES - initialize array for ranges of memory that were generated using a directive
-    // ex. [[12290], [12292, 12294], [12296], [12297, 12298]]
+    // ex. [{start: 12290}, {start: 12291, end: 12292}, {start: 12295, end: 12300, isSTRINGZ: true}]
     this.directiveMemoryMap = [];
 
     // Listeners for when registers, memory, etc. are changed
